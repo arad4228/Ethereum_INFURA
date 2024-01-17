@@ -1,0 +1,10 @@
+# 모든 key 정보는 올리지 않는다.
+*/secrete.py
+secrete.py
+
+# 출력에 사용한 파일은 git에 올리지않음
+input
+input/*
+
+output
+output/*
