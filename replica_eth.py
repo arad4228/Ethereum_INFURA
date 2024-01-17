@@ -42,7 +42,7 @@ def find_available_url(shared_URL_Limit_List, used_urls, lock):
         raise Exception("All API Keys expired or reached limit")
 
 
-def work_thread(ith, chunk_df, return_df, url_INFURA, lock):
+def work_thread(ith, chunk_df, return_df, url_INFURA, shared_URL_Limit_List, lock, ):
     w3 = Web3(Web3.HTTPProvider(base_URL + url_INFURA))
     print(f"{threading.current_thread().name} Start")
 
@@ -55,8 +55,6 @@ def work_thread(ith, chunk_df, return_df, url_INFURA, lock):
             (chunk_df['from_address'].apply(lambda x: is_eoa(w3, x, shared_URL_Limit_List, lock))) & 
             (chunk_df['to_address'].apply(lambda x: is_eoa(w3, x, shared_URL_Limit_List, lock)))
         ]
-        with lock:
-            used_urls[url_INFURA] = 0
         print(f"{threading.current_thread().name} Done")
         return_df.insert(ith, eoa_df)
 
@@ -81,7 +79,7 @@ def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock):
     
     for nThread in range(4):
         end = start + addition_Count
-        thread = Thread(target=work_thread, args=(nThread, chunk_df.loc[start:end], output_df_list, url_INFURA, lock))
+        thread = Thread(target=work_thread, args=(nThread, chunk_df.loc[start:end], output_df_list, url_INFURA, shared_URL_Limit_List, lock))
         thread_List.append(thread)
         start += addition_Count
         thread.start()
@@ -89,7 +87,8 @@ def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock):
     
     for thread in thread_List:
         thread.join()
-
+    
+    used_urls[url_INFURA] = 0
     print("All Thread Complete")
     eoa_df = pd.concat(output_df_list)
 
@@ -107,13 +106,13 @@ if __name__ == "__main__":
         used_urls = manager.dict({key: 0 for key in INFURA_URL_List})
         lock = manager.Lock()
 
-        for i in range(5, MAX_Chunk_Number, len(INFURA_URL_List)):
+        for i in range(11, MAX_Chunk_Number, 4):
                 process_List = []
                 try:
-                    # Infura URL 갯수 만큼 코어를 늘려 할당한다.
-                    for nProcess in range(len(INFURA_URL_List)):
+                    # 4 Process 16 Thread 사용.
+                    for nProcess in range(4):
                         file_name = f"chunk_{i + nProcess}.csv"
-                        process = Process(target=refine_INFURA, args=(nProcess + 1, file_name, shared_URL_Limit_List, used_urls,lock))
+                        process = Process(target=refine_INFURA, args=(nProcess + 1, file_name, shared_URL_Limit_List, used_urls, lock))
                         process_List.append(process)
                         process.start()
 
