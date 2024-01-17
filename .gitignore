@@ -11,3 +11,7 @@ output/*
 
 Function_test
 Function_test/*
+
+# 파이썬 cahc
+__pycache__
+*/__pycache__
