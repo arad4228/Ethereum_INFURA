@@ -42,9 +42,9 @@ def find_available_url(shared_URL_Limit_List, used_urls, lock):
         raise Exception("All API Keys expired or reached limit")
 
 
-def work_thread(ith, chunk_df, return_df, url_INFURA, shared_URL_Limit_List, lock, ):
+def work_thread(nProcess, ith, chunk_df, return_df, url_INFURA, shared_URL_Limit_List, lock):
     w3 = Web3(Web3.HTTPProvider(base_URL + url_INFURA))
-    print(f"{threading.current_thread().name} Start")
+    print(f"Process{nProcess}'s {threading.current_thread().name} Start")
 
     chunk_df = chunk_df.copy()
     chunk_df['from_address'] = chunk_df['from_address'].apply(w3.to_checksum_address)
@@ -55,7 +55,6 @@ def work_thread(ith, chunk_df, return_df, url_INFURA, shared_URL_Limit_List, loc
             (chunk_df['from_address'].apply(lambda x: is_eoa(w3, x, shared_URL_Limit_List, lock))) & 
             (chunk_df['to_address'].apply(lambda x: is_eoa(w3, x, shared_URL_Limit_List, lock)))
         ]
-        print(f"{threading.current_thread().name} Done")
         return_df.insert(ith, eoa_df)
 
     except Exception as e:
@@ -79,7 +78,7 @@ def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock):
     
     for nThread in range(4):
         end = start + addition_Count
-        thread = Thread(target=work_thread, args=(nThread, chunk_df.loc[start:end], output_df_list, url_INFURA, shared_URL_Limit_List, lock))
+        thread = Thread(target=work_thread, args=(nProcess, nThread, chunk_df.loc[start:end], output_df_list, url_INFURA, shared_URL_Limit_List, lock))
         thread_List.append(thread)
         start += addition_Count
         thread.start()
@@ -89,7 +88,7 @@ def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock):
         thread.join()
     
     used_urls[url_INFURA] = 0
-    print("All Thread Complete")
+    print(f"Process{nProcess}'s All Thread Complete")
     eoa_df = pd.concat(output_df_list)
 
     # Save the filtered dataframe to result_1.csv
@@ -105,8 +104,10 @@ if __name__ == "__main__":
         shared_URL_Limit_List = manager.dict({key: 0 for key in INFURA_URL_List})
         used_urls = manager.dict({key: 0 for key in INFURA_URL_List})
         lock = manager.Lock()
-
-        for i in range(11, MAX_Chunk_Number, 4):
+        status = True
+        for i in range(140, MAX_Chunk_Number, 4):
+                if not status:
+                    break
                 process_List = []
                 try:
                     # 4 Process 16 Thread 사용.
@@ -120,4 +121,4 @@ if __name__ == "__main__":
                         process.join()
                 except Exception as e:
                     print(e)
-
+                    status = False
