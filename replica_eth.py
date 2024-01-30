@@ -61,10 +61,17 @@ def work_thread(nProcess, ith, chunk_df, return_df, url_INFURA, shared_URL_Limit
         raise Exception(e)
 
 
-def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock):
+def refine_INFURA(nProcess, file_Name, shared_URL_Limit_List, used_urls, lock, status):
     file_Path = base_Input_PATH + file_Name
     chunk_df = pd.read_csv(file_Path)
-    url_INFURA = find_available_url(shared_URL_Limit_List, used_urls, lock)
+    try:
+        url_INFURA = find_available_url(shared_URL_Limit_List, used_urls, lock)
+    except Exception as e:
+        print(e)
+        with lock:
+            status.value = False
+        return
+
     print(f"Process{nProcess} start reading {file_Name}")
     print(f"Process{nProcess} Using API-Key:{url_INFURA}")
 
@@ -104,21 +111,18 @@ if __name__ == "__main__":
         shared_URL_Limit_List = manager.dict({key: 0 for key in INFURA_URL_List})
         used_urls = manager.dict({key: 0 for key in INFURA_URL_List})
         lock = manager.Lock()
-        status = True
-        for i in range(140, MAX_Chunk_Number, 4):
-                if not status:
-                    break
-                process_List = []
-                try:
-                    # 4 Process 16 Thread 사용.
-                    for nProcess in range(4):
-                        file_name = f"chunk_{i + nProcess}.csv"
-                        process = Process(target=refine_INFURA, args=(nProcess + 1, file_name, shared_URL_Limit_List, used_urls, lock))
-                        process_List.append(process)
-                        process.start()
+        status = manager.Value('i', True)
 
-                    for process in process_List:
-                        process.join()
-                except Exception as e:
-                    print(e)
-                    status = False
+        for i in range(255, MAX_Chunk_Number, 4):
+            if not status.value:
+                break
+            process_List = []
+            # 4 Process 16 Thread 사용.
+            for nProcess in range(4):
+                file_name = f"chunk_{i + nProcess}.csv"
+                process = Process(target=refine_INFURA, args=(nProcess + 1, file_name, shared_URL_Limit_List, used_urls, lock, status))
+                process_List.append(process)
+                process.start()
+
+            for process in process_List:
+                process.join()
